@@ -22,12 +22,12 @@ pub fn rotate_right(mut source: impl Read + Seek, mut destination: impl Write) -
         match source.read(&mut buf) {
             Ok(0) => break,
             Ok(n) => {
-                for byte in &buf[..n] {
+                for byte in &mut buf[..n] {
                     let next_carry_bit = extract_lsb_and_rotate_to_msb(*byte);
-                    let new_byte = (byte >> 1) | carry_bit;
-                    destination.write_all(&[new_byte])?;
+                    *byte = (*byte >> 1) | carry_bit;
                     carry_bit = next_carry_bit;
                 }
+                destination.write_all(&buf[..n])?;
             }
             Err(e) if e.kind() == ErrorKind::Interrupted => continue,
             Err(e) => return Err(e.into()),
@@ -51,11 +51,12 @@ pub fn rotate_left(mut source: impl Read, mut destination: impl Write) -> Rotate
         match source.read(&mut buf) {
             Ok(0) => break,
             Ok(n) => {
-                for byte in &buf[..n] {
-                    let new_byte = (prev << 1) | extract_msb_and_rotate_to_lsb(*byte);
-                    destination.write_all(&[new_byte])?;
-                    prev = *byte;
+                for byte in &mut buf[..n] {
+                    let original_byte = *byte;
+                    *byte = (prev << 1) | extract_msb_and_rotate_to_lsb(original_byte);
+                    prev = original_byte;
                 }
+                destination.write_all(&buf[..n])?;
             }
             Err(e) if e.kind() == ErrorKind::Interrupted => continue,
             Err(e) => return Err(e.into()),
@@ -82,18 +83,29 @@ mod tests {
     use std::io::Cursor;
 
     #[test]
-    fn test_rotate_left() {
-        let input = Cursor::new([0x81u8, 0x81u8]);
+    fn rotate_left_one_byte() {
         let mut output = Vec::new();
-        rotate_left(input, &mut output).unwrap();
-        assert_eq!(output, [0x03, 0x03]);
+        rotate_left(Cursor::new([0x81u8]), &mut output).unwrap();
+        assert_eq!(output, [0x03]);
     }
-
     #[test]
-    fn test_rotate_right() {
-        let input = Cursor::new([0x81u8, 0x81u8]);
+    fn rotate_left_two_bytes() {
+        // 1000_0001 0100_0000  ->  0000_0010 1000_0001
         let mut output = Vec::new();
-        rotate_right(input, &mut output).unwrap();
-        assert_eq!(output, [0xC0, 0xC0]);
+        rotate_left(Cursor::new([0x81u8, 0x40]), &mut output).unwrap();
+        assert_eq!(output, [0x02, 0x81]);
+    }
+    #[test]
+    fn rotate_right_one_byte() {
+        let mut output = Vec::new();
+        rotate_right(Cursor::new([0x81u8]), &mut output).unwrap();
+        assert_eq!(output, [0xC0]);
+    }
+    #[test]
+    fn rotate_right_two_bytes() {
+        // 1000_0001 0100_0000  ->  0100_0000 1010_0000
+        let mut output = Vec::new();
+        rotate_right(Cursor::new([0x81u8, 0x40]), &mut output).unwrap();
+        assert_eq!(output, [0x40, 0xA0]);
     }
 }

@@ -17,7 +17,6 @@ fn main() -> RotateResult<()> {
     let args = match parse_args() {
         Ok(args) => args,
         Err(e) => {
-            eprintln!("Could not parse arguments: {e}");
             print_help();
             return Err(e);
         }
@@ -32,6 +31,7 @@ fn main() -> RotateResult<()> {
         Direction::Left => rotate_left(input, output)?,
         Direction::Right => rotate_right(input, output)?,
     };
+    // Safety: rename in linux is atomic
     std::fs::rename(temmp_file, args.output_path).map_err(RotateError::IO)
 }
 
